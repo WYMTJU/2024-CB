@@ -1,0 +1,83 @@
+clc
+clear
+for nbrgion = 1:2
+    if nbrgion ==1
+        TTList0= 'TTList_dCA1_pyr.txt';
+        file_video = 'Data_video.mat';
+        file_spike = 'Data_spikes_dCA1.mat';
+        region = 'dCA1';
+    else
+        TTList0= 'TTList_mPFC_pyr.txt';
+        file_video = 'Data_video.mat';
+        file_spike = 'Data_spikes_mPFC.mat';
+        region = 'mPFC';
+    end
+    %%%======================Double Check!!!==============================
+    p.fieldTreshold = 0.1;
+    p.lowestFieldRate = 1;
+    file_output = strcat('Cells_eachsession_wxl_2_01peak_1130_',region ,'.mat');
+    % limit the posang_ontrack with running speed > vel_threshold
+    vel_threshold = 5; % cm/s  %IMPORTANT: change to 0 if do not want to limit
+    %%%===================================================================
+    for icon= 1:2
+        if icon==1
+            directories_allData_control
+            note = 'control';
+        else
+            directories_allData_Alzheimer % AD;
+            note = 'AD';
+        end
+
+        for ns = 1:isession
+            if nbrgion == 1
+                if isempty(CSClist_CA1{ns})
+                    fprintf(['=====day %.3g do not have hippocampal cells=====' '\n'], ns)
+                    continue
+                end
+            else
+                if isempty(CSClist_PFC{ns})
+                    fprintf(['=====day %.3g do not have prefrontal cells=====' '\n'], ns)
+                    continue
+                end
+            end
+            path_ns = path{ns};
+            cd(path_ns);
+            date_ns = date{ns};
+            Ind_Rat_ns = Ind_Rat(ns);
+            load(file_spike);
+            load(file_video);
+            
+            Ncell = getnumberofcells_cz_v1(TTList0);
+            trackdata_ns = trackdata{ns};
+            
+            % rate maps for sessions
+            [Ratemap_eachsession_no_reverse,spikes,mapAxis,Ts_start_stop] = ratemap_session_v2(trackdata_ns,spikes,vel_threshold);
+            
+            save(file_output,'TTList0','path_ns','Ncell','trackdata_ns','Ratemap_eachsession_no_reverse','spikes','mapAxis','Ts_start_stop');
+              %% calculate the place fields
+            p.minNumBins = 3;
+            peak_all = 0.5;
+            
+            % place field for single laps
+            nFields_eachsession = cell(size(Ratemap_eachsession_no_reverse));
+            fieldProp_eachsession = cell(size(Ratemap_eachsession_no_reverse));
+            for nseg = 1:size(Ratemap_eachsession_no_reverse,2)
+                ratemap = Ratemap_eachsession_no_reverse{nseg};
+                if ~isempty(ratemap)
+                    for nc = 1:Ncell
+                        ratemap_nc = ratemap(:,nc);
+                        [nFields,fieldProp] = placefield_circ_CZ(ratemap_nc,p,mapAxis,nc,region,date_ns,Ind_Rat_ns,nseg);
+                        nFields_eachsession{nseg}(1,nc) = nFields;
+                        fieldProp_eachsession{nseg}{1,nc} = fieldProp;
+                    end
+                end
+            end
+            
+            save(file_output,'p','peak_all',...
+                'nFields_eachsession','fieldProp_eachsession','-append');
+            
+            %% Return
+            cd ../
+        end
+    end
+end          
